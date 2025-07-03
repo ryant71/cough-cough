@@ -1,0 +1,18 @@
+[
+  {
+    "ParameterKey": "HostedZoneId",
+    "ParameterValue": "LKJLK78XXXXXXX"
+  },
+  {
+    "ParameterKey": "HostName",
+    "ParameterValue": "foo.bar.com"
+  },
+  {
+    "ParameterKey": "BucketName",
+    "ParameterValue": "my-boooket"
+  },
+  {
+    "ParameterKey": "CertBotEmail",
+    "ParameterValue": "fubar@foo.com"
+  }
+]
