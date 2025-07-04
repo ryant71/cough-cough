@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -xe
 
 HostName=$1
 Suffix=$2
@@ -35,16 +35,16 @@ pid="$(ps aux | grep transmission-daemon | grep -v grep | awk '{print $2}')"
 [[ -n "$pid" ]] && kill $pid
 
 echo "create the local configs"
-sudo -i -u ubuntu transmission-daemon
+sudo -u ubuntu transmission-daemon
 echo "kill again so config edits last"
 pid="$(ps aux | grep transmission-daemon | grep -v grep | awk '{print $2}')"
 [[ -n "$pid" ]] && kill $pid
 sleep 1
 
-/tmp/update-settings.py
+sudo -u ubuntu /tmp/update-settings.py
 
 echo "start again"
-sudo -i -u ubuntu transmission-daemon -g /home/ubuntu/.config/transmission-daemon/
+sudo -u ubuntu transmission-daemon -g /home/ubuntu/.config/transmission-daemon/
 
 # lets just sleep a bit to give DNS a chance
 threshold=0
@@ -53,7 +53,7 @@ while sleep 5; do
         echo "This is taking too long"
         break
     fi
-    myhost=$(dig @8.8.8.8 +short -4 ${HostName})
+    myhost=$(dig @8.8.8.8 +short -4 "${HostName}")
     if [ -z "${myhost}" ]
     then
         echo -n ".${myhost}"
@@ -65,13 +65,14 @@ while sleep 5; do
 done
 
 # certbot is run and edits the default nginx config
+echo "Install certbot"
 snap refresh
 snap install certbot --classic
+
+echo "certbot certonly --nginx --agree-tos -m ${CertBotEmail} -d ${HostName} -n"
 certbot certonly --nginx --agree-tos -m "${CertBotEmail}" -d "${HostName}" -n
 
-# add nginx proxy config
-mv /tmp/nginx-proxy.conf /etc/nginx/conf.d/nginx-proxy.conf
-
+echo "Running sed on nginf-proxy.conf"
 sed "s/_HOSTNAME_/${HostName}/g" /tmp/nginx-proxy.conf > /etc/nginx/conf.d/nginx-proxy.conf
 
 nginx -t 2>&1

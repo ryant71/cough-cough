@@ -18,13 +18,12 @@ aws cloudformation --region "${region}" create-stack \
     --parameters "file://${parameters_file}" \
     --capabilities CAPABILITY_NAMED_IAM
 
-if [[ $? != 0 ]]; then
-    echo "Something went wrong with create-stack. Here are the exports."
-    aws cloudformation list-exports \
-        --query 'Exports[*].[Name,Value]' \
-        --output table
+exit_code=$?
+
+if [[ $exit_code != 0 ]]; then
+    echo "Something went wrong with create-stack."
     echo -e "\n\nExiting..."
-    exit 1
+    exit $exit_code
 fi
 
 # loop until completion
@@ -42,34 +41,37 @@ while true; do
     sleep 5
 done
 
+# get exports
+stack_outputs=$(aws cloudformation describe-stacks --stack-name "$stack_name" --output json)
+
+# get security group id from exports json
+secgrp=$(echo $stack_outputs | jq -r '.Stacks[0].Outputs[] | select(.ExportName == "prod-cfn-ec2-download-secgrp") | .OutputValue')
+
+# get my IP address so I can open ssh and https
 myip=$(curl -s https://ipinfo.io/ip ; echo) || { echo "Could not get your IP"; exit 1; }
 
-secgrp=$(aws cloudformation list-exports \
-    --query "Exports[?Name=='prod-cfn-ec2-download-secgrp'].Value" \
-    --output text)
-
 echo "My IP: ${myip}"
-echo "SecGrp: ${secgrp}"
+
+# print all exports
+echo "$stack_outputs" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
 
 # open ssh to my IP
 aws --region "${region}" ec2 authorize-security-group-ingress \
     --group-id "${secgrp}" \
     --protocol tcp \
     --port 22 \
-    --cidr "${myip}/32"
+    --cidr "${myip}/32" >/dev/null
 
 # open nginx port 443 to my IP
 aws --region "${region}" ec2 authorize-security-group-ingress \
     --group-id "${secgrp}" \
     --protocol tcp \
     --port 443 \
-    --cidr "${myip}/32"
+    --cidr "${myip}/32" >/dev/null
 
-aws cloudformation list-exports \
-    --query 'Exports[*].[Name,Value]' \
-    --output table
 
-# wait until dns entry is created. for now, there is no timeout
+# wait until EC2 dns entry is created. for now, there is no timeout
+echo "Waiting for EC2 DNS to propagate"
 while sleep 1; do
     if nc -w 2 -z ${hostname} 443 2>/dev/null; then
         echo "\n $(nc -w 2 -vz ${hostname} 443)"
@@ -79,9 +81,8 @@ while sleep 1; do
     fi
 done
 
+# HTTP is no longer needed
 echo -ne "Revoke port 80... in sec group ${secgrp}"
 aws --region "${region}" ec2 revoke-security-group-ingress \
     --group-id "${secgrp}" \
-    --protocol tcp --port 80 --cidr 0.0.0.0/0
-
-echo "S3 bucket = $s3bucket"
+    --protocol tcp --port 80 --cidr 0.0.0.0/0 >/dev/null
