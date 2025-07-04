@@ -56,9 +56,9 @@ deploy_stack() {
 
   if [[ "$stack_name" == "hg-ec2" ]]; then
     log "Uploading EC2-related files to s3://$s3bucket/"
-    aws s3 cp ./upload-files/nginx-proxy.conf s3://"$s3bucket"/nginx-proxy.conf >>"$LOG_FILE" 2>&1
-    aws s3 cp ./upload-files/init.sh s3://"$s3bucket"/init.sh >>"$LOG_FILE" 2>&1
-    aws s3 cp ./upload-files/update-settings.py s3://"$s3bucket"/update-settings.py >>"$LOG_FILE" 2>&1
+    aws s3 cp ./ec2-files/nginx-proxy.conf s3://"$s3bucket"/nginx-proxy.conf >>"$LOG_FILE" 2>&1
+    aws s3 cp ./ec2-files/init.sh s3://"$s3bucket"/init.sh >>"$LOG_FILE" 2>&1
+    aws s3 cp ./ec2-files/update-settings.py s3://"$s3bucket"/update-settings.py >>"$LOG_FILE" 2>&1
     opts+=(--capabilities CAPABILITY_NAMED_IAM)
   fi
 

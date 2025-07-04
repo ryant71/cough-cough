@@ -4,7 +4,7 @@ Description: This stack deploys a VPC with public and private subnets configured
 Parameters:
   Environment:
     Type: String
-    Description: Beta, RC, Prod, etc.
+    Description: What we're calling this whole shebang
   VpcCidrBlock:
     Type: String
     Description: The CIDR block for the VPC
@@ -22,6 +22,8 @@ Parameters:
     Description: Subnet numbering
   UseNatGateway:
     Type: String
+    Description: To incur costs, make this yes. Only needed if there are things
+                 in private subnets that need to get to the outside world.
     Default: 'no'
 
 Conditions:

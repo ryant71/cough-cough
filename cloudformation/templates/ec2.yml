@@ -1,22 +1,20 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Deploys an EC2 AMI to a given VPC and subnet (qs-xxx)
 
-# Description of parameters:
-# InstanceType: ec2 instance to create
-# Cidr: Cidr for a corresponding region
-# AmiId: an id of an image to use
 Mappings:
   InstanceMap:
-    Downloader:
+    downloader:
       InstanceType: 'm5.large'
-      # AmiId: 'ami-0a3a484e07ffb6be7' # ubuntu 22.04 x86
+      AmiId: 'ami-03cc8375791cb8bcf' # ubuntu 24.04 x86
+    somepurpose:
+      InstanceType: 't3.nano'
       AmiId: 'ami-03cc8375791cb8bcf' # ubuntu 24.04 x86
 
 Parameters:
   Environment:
     Type: String
-    Description: The environment. We'll just use 'prod'
-    Default: prod
+    Description: The environment.
+    Default: miscellaneous
   SshKeyName:
     Type: AWS::EC2::KeyPair::KeyName
     Default: hg 
@@ -41,8 +39,8 @@ Resources:
   MyEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [InstanceMap, 'Downloader', 'AmiId']
-      InstanceType: !FindInMap [InstanceMap, 'Downloader', 'InstanceType']
+      ImageId: !FindInMap [InstanceMap, !Ref Suffix, 'AmiId']
+      InstanceType: !FindInMap [InstanceMap, !Ref Suffix, 'InstanceType']
       KeyName: !Ref 'SshKeyName'
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
