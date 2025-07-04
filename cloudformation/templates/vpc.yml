@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This stack deploys a VPC with public and private subnets configured in two AZs,
+             two public and three private with NAT gateways in the public subnets
+Parameters:
+  Environment:
+    Type: String
+    Description: Beta, RC, Prod, etc.
+  VpcCidrBlock:
+    Type: String
+    Description: The CIDR block for the VPC
+  PublicOneCIDR:
+    Type: String
+    Description: Subnet numbering
+  PublicTwoCIDR:
+    Type: String
+    Description: Subnet numbering
+  PrivateOneCIDR:
+    Type: String
+    Description: Subnet numbering
+  PrivateTwoCIDR:
+    Type: String
+    Description: Subnet numbering
+  UseNatGateway:
+    Type: String
+    Default: 'no'
+
+Conditions:
+  UseNatGateway: !Equals [!Ref 'UseNatGateway', 'yes']
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: !Ref 'VpcCidrBlock'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc'
+
+  PublicSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs { "Ref": "AWS::Region" }]
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref 'PublicOneCIDR'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PublicOne'
+  PublicSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs { "Ref": "AWS::Region" }]
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref 'PublicTwoCIDR'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PublicTwo'
+
+  # In the two private subnets resources will only have private
+  # IP addresses, and will only be reachable by other members of the VPC
+  PrivateSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs { "Ref": "AWS::Region" }]
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref 'PrivateOneCIDR'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PrivateOne'
+  PrivateSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs { "Ref": "AWS::Region" }]
+      VpcId: !Ref 'VPC'
+      CidrBlock: !Ref 'PrivateTwoCIDR'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PrivateTwo'
+
+  # Setup networking resources for the public subnets. Resources
+  # in the public subnets have public IP addresses and the routing table
+  # sends network traffic via the internet gateway.
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-InternetGateway'
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref 'VPC'
+      InternetGatewayId: !Ref 'InternetGateway'
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PublicRouteTable'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref 'PublicRouteTable'
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref 'InternetGateway'
+  PublicSubnetOneRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetOne
+      RouteTableId: !Ref PublicRouteTable
+  PublicSubnetTwoRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetTwo
+      RouteTableId: !Ref PublicRouteTable
+
+  # Setup networking resources for the private subnets. Resources
+  # in these subnets have only private IP addresses, and must use a NAT
+  # gateway to talk to the internet.
+  NatGatewayOneAttachment:
+    Condition: UseNatGateway
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayTwoAttachment:
+    Condition: UseNatGateway
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGatewayOne:
+    Condition: UseNatGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayOneAttachment.AllocationId
+      SubnetId: !Ref PublicSubnetOne
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-NatGatewayOne'
+
+  NatGatewayTwo:
+    Condition: UseNatGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayTwoAttachment.AllocationId
+      SubnetId: !Ref PublicSubnetTwo
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-NatGatewayTwo'
+
+  PrivateRouteTableOne:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PrivateRouteTableOne'
+  # Only create route via NAT if UseNatGateway is true
+  PrivateRouteOne:
+    Condition: UseNatGateway
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableOne
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayOne
+  PrivateRouteTableOneAssociation:
+    Condition: UseNatGateway
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableOne
+      SubnetId: !Ref PrivateSubnetOne
+
+  PrivateRouteTableTwo:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-PrivateRouteTableTwo'
+  # Only create route via NAT if UseNatGateway is true
+  PrivateRouteTwo:
+    Condition: UseNatGateway
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableTwo
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayTwo
+  PrivateRouteTableTwoAssociation:
+    Condition: UseNatGateway
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableTwo
+      SubnetId: !Ref PrivateSubnetTwo
+
+# These are the Values output by the CloudFormation template. Be careful
+# about changing any of them, because they are exported with specific
+# names so that the other related CF templates can use them.
+Outputs:
+  VPCId:
+    Description: The ID of the VPC that this stack is deployed in
+    Value: !Ref 'VPC'
+    Export:
+      Name: !Sub '${Environment}-VPCId'
+  VpcCidrBlock:
+    Description: VPC CIDR block
+    Value: !Ref 'VpcCidrBlock'
+    Export:
+      Name: !Sub '${Environment}-VpcCidrBlock'
+  PublicSubnetOne:
+    Description: Public subnet one
+    Value: !Ref 'PublicSubnetOne'
+    Export:
+      Name: !Sub '${Environment}-PublicSubnetOne'
+  PublicSubnetTwo:
+    Description: Public subnet two
+    Value: !Ref 'PublicSubnetTwo'
+    Export:
+      Name: !Sub '${Environment}-PublicSubnetTwo'
+  PrivateSubnetOne:
+    Description: Private subnet one
+    Value: !Ref 'PrivateSubnetOne'
+    Export:
+      Name: !Sub '${Environment}-PrivateSubnetOne'
+  PrivateSubnetTwo:
+    Description: Private subnet two
+    Value: !Ref 'PrivateSubnetTwo'
+    Export:
+      Name: !Sub '${Environment}-PrivateSubnetTwo'
+  PrivateRouteTableOne:
+    Value: !Ref 'PrivateRouteTableOne'
+    Export:
+      Name: !Sub '${Environment}-PrivateRouteTableOne'
+  PrivateRouteTableTwo:
+    Value: !Ref 'PrivateRouteTableTwo'
+    Export:
+      Name: !Sub '${Environment}-PrivateRouteTableTwo'
