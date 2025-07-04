@@ -70,9 +70,9 @@ snap refresh
 snap install certbot --classic
 
 echo "certbot certonly --nginx --agree-tos -m ${CertBotEmail} -d ${HostName} -n"
-certbot certonly --nginx --agree-tos -m "${CertBotEmail}" -d "${HostName}" -n
+certbot certonly --nginx --agree-tos -m "${CertBotEmail}" -d "${HostName}" -n 2>&1
 
-echo "Running sed on nginf-proxy.conf"
+echo "Running sed on nginx-proxy.conf"
 sed "s/_HOSTNAME_/${HostName}/g" /tmp/nginx-proxy.conf > /etc/nginx/conf.d/nginx-proxy.conf
 
 nginx -t 2>&1

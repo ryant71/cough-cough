@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "prod"
+  },
+  {
+    "ParameterKey": "VpcCidrBlock",
+    "ParameterValue": "10.0.0.0/18"
+  },
+  {
+    "ParameterKey": "PublicOneCIDR",
+    "ParameterValue": "10.0.0.0/20"
+  },
+  {
+    "ParameterKey": "PublicTwoCIDR",
+    "ParameterValue": "10.0.16.0/20"
+  },
+  {
+    "ParameterKey": "PrivateOneCIDR",
+    "ParameterValue": "10.0.32.0/20"
+  },
+  {
+    "ParameterKey": "PrivateTwoCIDR",
+    "ParameterValue": "10.0.48.0/20"
+  }
+]
