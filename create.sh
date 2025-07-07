@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
 
 # Config
 region="eu-west-1"
 LOG_FILE="/tmp/deploy-$(date +%Y%m%d-%H%M%S).log"
 VERBOSE=false  # Override with --verbose flag
-ONLY_VPC=false # Override with --only-vpc flag
+VPC_ONLY=false # Override with --vpc-only flag
 
 # Input files
 ec2_parameters_file=cloudformation/parameters/ec2-parameters.json
@@ -17,7 +19,8 @@ s3bucket=$(jq -r '.[] | select(.ParameterKey == "BucketName") | .ParameterValue'
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --verbose) VERBOSE=true ;;
-    --only-vpc) ONLY_VPC=true ;;
+    --vpc-only) VPC_ONLY=true ;;
+    *) echo "$1 is invalid"; exit 1;;
   esac
   shift
 done
@@ -30,8 +33,10 @@ log() {
 
 # Stack output printer
 print_outputs() {
-  [[ "$VERBOSE" == false && "$2" != "always" ]] && return
-  echo "$1" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
+  local outputs="$1"
+  local when="${2:-}"
+  [[ "$VERBOSE" == false && "$when" != "always" ]] && return
+  echo "$outputs" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
 }
 
 # Generic deploy function
@@ -73,7 +78,7 @@ deploy_stack() {
     --template-file "$template_file" \
     --parameter-overrides ${parameter_overrides[@]} \
     --region "$region" \
-    "${opts[@]}" >>"$LOG_FILE" 2>&1
+    "${opts[@]}" >&2        # >>"$LOG_FILE" 2>&1
 
   log "Describing outputs for stack: $stack_name"
   aws cloudformation describe-stacks \
@@ -89,7 +94,7 @@ vpc_stack_outputs=$(deploy_stack \
   "cloudformation/parameters/vpc-parameters.json" \
   "$region")
 
-if [[ "$ONLY_VPC" == true ]]; then
+if [[ "$VPC_ONLY" == true ]]; then
   print_outputs "$vpc_stack_outputs" always
   exit 0
 else
@@ -105,6 +110,9 @@ if [[ -z "$myip" ]]; then
 fi
 log "Your IP is: $myip"
 
+echo "you are here"
+exit
+
 # EC2 Stack
 ec2_stack_outputs=$(deploy_stack \
   "hg-ec2" \
@@ -112,8 +120,8 @@ ec2_stack_outputs=$(deploy_stack \
   "$ec2_parameters_file" \
   "$region")
 
-# Get security group from outputs
-secgrp=$(echo "$ec2_stack_outputs" | jq -r '.Stacks[0].Outputs[] | select(.ExportName == "prod-cfn-ec2-download-secgrp") | .OutputValue')
+# Get security group id from outputs
+secgrp=$(echo "$ec2_stack_outputs" | jq -r '.Stacks[0].Outputs[] | select(.ExportName | test("secgrp")) | .OutputValue')
 log "Using security group ID: $secgrp"
 
 # Open ports for your IP
@@ -126,7 +134,8 @@ aws --region "$region" ec2 authorize-security-group-ingress \
   --group-id "$secgrp" \
   --protocol tcp --port 443 --cidr "${myip}/32" >>"$LOG_FILE" 2>&1
 
-# Wait for EC2 DNS to be available
+# Wait until certbot has done it's thing and
+# nginx has been restarted with https enabled
 echo "Waiting for HTTPS to be available"
 while sleep 1; do
   if nc -w 2 -z "$hostname" 443 2>/dev/null; then
