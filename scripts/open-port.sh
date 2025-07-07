@@ -8,9 +8,7 @@ else
 	port=$1
 fi
 
-secgrp=$(aws cloudformation list-exports \
-	--query "Exports[?Name=='prod-cfn-ec2-download-secgrp'].Value" \
-	--output text)
+secgrp=$(aws cloudformation describe-stacks --stack-name hg-ec2 | jq -r '.Stacks[0].Outputs[] | select(.ExportName | test("secgrp")) | .OutputValue')
 
 [[ -z "$secgrp" ]] && { echo "Security Group not found"; exit 1; }
 echo "Security Group: ${secgrp}"

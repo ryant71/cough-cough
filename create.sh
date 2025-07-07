@@ -1,47 +1,45 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
 
-# --- Config ---
+# Config
 region="eu-west-1"
 LOG_FILE="/tmp/deploy-$(date +%Y%m%d-%H%M%S).log"
 VERBOSE=false  # Override with --verbose flag
+VPC_ONLY=false # Override with --vpc-only flag
 
-# --- Verbose CLI toggle ---
+# Input files
+ec2_parameters_file=cloudformation/parameters/ec2-parameters.json
+hostname=$(jq -r '.[] | select(.ParameterKey == "HostName") | .ParameterValue' "$ec2_parameters_file")
+s3bucket=$(jq -r '.[] | select(.ParameterKey == "BucketName") | .ParameterValue' "$ec2_parameters_file")
+
+# CLI toggle
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --verbose) VERBOSE=true ;;
+    --vpc-only) VPC_ONLY=true ;;
+    *) echo "$1 is invalid"; exit 1;;
   esac
   shift
 done
 
-# --- Logger ---
+# Logger
 log() {
   echo "$@" >> "$LOG_FILE"
   $VERBOSE && echo "$@" >&2
 }
 
-# --- Input files ---
-ec2_parameters_file=cloudformation/parameters/ec2-parameters.json
-hostname=$(jq -r '.[] | select(.ParameterKey == "HostName") | .ParameterValue' "$ec2_parameters_file")
-s3bucket=$(jq -r '.[] | select(.ParameterKey == "BucketName") | .ParameterValue' "$ec2_parameters_file")
-
-# --- Get public IP ---
-log "Detecting your public IP address..."
-myip=$(curl -s https://ipinfo.io/ip || true)
-if [[ -z "$myip" ]]; then
-  echo "Could not get your IP. Exiting." >&2
-  exit 1
-fi
-log "Your IP is: $myip"
-
-# --- Stack output printer ---
+# Stack output printer
 print_outputs() {
-  [[ "$VERBOSE" == false && "$2" != "always" ]] && return
-  echo "$1" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
+  local outputs="$1"
+  local when="${2:-}"
+  [[ "$VERBOSE" == false && "$when" != "always" ]] && return
+  echo "$outputs" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
 }
 
-# --- Generic deploy function ---
+# Generic deploy function
 deploy_stack() {
   local stack_name="$1"
   local template_file="$2"
@@ -80,7 +78,7 @@ deploy_stack() {
     --template-file "$template_file" \
     --parameter-overrides ${parameter_overrides[@]} \
     --region "$region" \
-    "${opts[@]}" >>"$LOG_FILE" 2>&1
+    "${opts[@]}" >&2        # >>"$LOG_FILE" 2>&1
 
   log "Describing outputs for stack: $stack_name"
   aws cloudformation describe-stacks \
@@ -89,27 +87,44 @@ deploy_stack() {
     --output json
 }
 
-# --- VPC Stack ---
+# VPC Stack
 vpc_stack_outputs=$(deploy_stack \
   "hg-vpc" \
   "cloudformation/templates/vpc.yml" \
   "cloudformation/parameters/vpc-parameters.json" \
   "$region")
 
-print_outputs "$vpc_stack_outputs"
+if [[ "$VPC_ONLY" == true ]]; then
+  print_outputs "$vpc_stack_outputs" always
+  exit 0
+else
+  print_outputs "$vpc_stack_outputs"
+fi
 
-# --- EC2 Stack ---
+# Get public IP
+log "Detecting your public IP address..."
+myip=$(curl -s https://ipinfo.io/ip || true)
+if [[ -z "$myip" ]]; then
+  echo "Could not get your IP. Exiting." >&2
+  exit 1
+fi
+log "Your IP is: $myip"
+
+echo "you are here"
+exit
+
+# EC2 Stack
 ec2_stack_outputs=$(deploy_stack \
   "hg-ec2" \
   "cloudformation/templates/ec2.yml" \
   "$ec2_parameters_file" \
   "$region")
 
-# --- Get security group from outputs ---
-secgrp=$(echo "$ec2_stack_outputs" | jq -r '.Stacks[0].Outputs[] | select(.ExportName == "prod-cfn-ec2-download-secgrp") | .OutputValue')
+# Get security group id from outputs
+secgrp=$(echo "$ec2_stack_outputs" | jq -r '.Stacks[0].Outputs[] | select(.ExportName | test("secgrp")) | .OutputValue')
 log "Using security group ID: $secgrp"
 
-# --- Open ports for your IP ---
+# Open ports for your IP
 log "Authorizing SSH and HTTPS access for $myip/32"
 aws --region "$region" ec2 authorize-security-group-ingress \
   --group-id "$secgrp" \
@@ -119,12 +134,13 @@ aws --region "$region" ec2 authorize-security-group-ingress \
   --group-id "$secgrp" \
   --protocol tcp --port 443 --cidr "${myip}/32" >>"$LOG_FILE" 2>&1
 
-# --- Wait for EC2 DNS to be available ---
+# Wait until certbot has done it's thing and
+# nginx has been restarted with https enabled
 echo "Waiting for HTTPS to be available"
 while sleep 1; do
   if nc -w 2 -z "$hostname" 443 2>/dev/null; then
     echo -e "\n$(nc -w 2 -vz "$hostname" 443 2>&1)"
-    # --- Revoke port 80 access ---
+    # Revoke port 80 access
     echo -e "\nRevoke port 80... in sec group ${secgrp}"
     aws --region "$region" ec2 revoke-security-group-ingress \
         --group-id "$secgrp" \
@@ -137,5 +153,5 @@ done
 
 print_outputs "$ec2_stack_outputs" always
 
-# --- Done ---
+# Done
 echo "Done. Detailed log: $LOG_FILE"
