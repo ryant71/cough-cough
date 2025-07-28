@@ -57,6 +57,7 @@ deploy_stack() {
     aws s3 cp ./ec2-files/nginx-proxy.conf s3://"$s3bucket"/nginx-proxy.conf >>"$LOG_FILE" 2>&1
     aws s3 cp ./ec2-files/init.sh s3://"$s3bucket"/init.sh >>"$LOG_FILE" 2>&1
     aws s3 cp ./ec2-files/update-settings.py s3://"$s3bucket"/update-settings.py >>"$LOG_FILE" 2>&1
+    aws s3 cp ./ec2-files/letsencrypt.tgz s3://"$s3bucket"/letsencrypt.tgz >>"$LOG_FILE" 2>&1
     opts+=(--capabilities CAPABILITY_NAMED_IAM)
   fi
 
@@ -101,6 +102,8 @@ else
   print_outputs "$vpc_stack_outputs"
 fi
 
+echo "Begin ec2 deploy"
+
 # Get public IP
 log "Detecting your public IP address..."
 myip=$(curl -s https://ipinfo.io/ip || true)
@@ -109,9 +112,6 @@ if [[ -z "$myip" ]]; then
   exit 1
 fi
 log "Your IP is: $myip"
-
-echo "you are here"
-exit
 
 # EC2 Stack
 ec2_stack_outputs=$(deploy_stack \
@@ -134,6 +134,12 @@ aws --region "$region" ec2 authorize-security-group-ingress \
   --group-id "$secgrp" \
   --protocol tcp --port 443 --cidr "${myip}/32" >>"$LOG_FILE" 2>&1
 
+echo "IP"
+aws ec2 describe-instances \
+  --filters Name=instance-state-name,Values=running \
+  --query 'Reservations[*].Instances[*].NetworkInterfaces[*].Association.PublicIp' \
+  --output text
+
 # Wait until certbot has done it's thing and
 # nginx has been restarted with https enabled
 echo "Waiting for HTTPS to be available"
@@ -152,6 +158,12 @@ while sleep 1; do
 done
 
 print_outputs "$ec2_stack_outputs" always
+
+# check for new letsencrypt tarball
+aws s3 cp s3://"${s3bucket}"/letsencrypt.tgz ec2-files/letsencrypt.tgz
+if [[ "$?" == 0 ]]; then
+  aws s3 rm s3://"${s3bucket}"/letsencrypt.tgz
+fi
 
 # Done
 echo "Done. Detailed log: $LOG_FILE"

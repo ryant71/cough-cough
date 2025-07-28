@@ -1,12 +1,14 @@
 #!/bin/bash
 
-set -xe
+set -euo pipefail
 
 HostName=$1
 Suffix=$2
 Environment=$3
 BucketName=$4
 CertBotEmail=$5
+
+echo "Begin init.sh"
 
 echo "export HostName=$HostName"
 echo "export Suffix=$Suffix"
@@ -18,38 +20,52 @@ echo "export CertBotEmail=$CertBotEmail"
 aws sts get-caller-identity
 aws s3 ls "${BucketName}"
 
+echo "Making directories..."
 # mount s3 drive
-sudo -u ubuntu mkdir -p /home/ubuntu/s3bucket
-sudo -u ubuntu s3fs "${BucketName}" /home/ubuntu/s3bucket -o nonempty,iam_role="${Environment}-cfn-ec2"
-sudo -u ubuntu mkdir -p /home/ubuntu/s3bucket/Downloads
+sudo -u ubuntu mkdir -p /home/ubuntu/s3bucket 
 sudo -u ubuntu mkdir -p /home/ubuntu/incomplete-dir
+echo "Mount S3"
+sudo -u ubuntu s3fs "${BucketName}" /home/ubuntu/s3bucket -o nonempty,iam_role="${Environment}-cfn-ec2"
+sleep 5
+
+sudo -u ubuntu mkdir -p /home/ubuntu/s3bucket/Downloads
 sudo -u ubuntu ln -s /home/ubuntu/s3bucket/Downloads /home/ubuntu/Downloads
 
 # setup transmission as ubuntu user
 # a tad convoluted
-echo "systemctl stop transmission-daemon"
-systemctl stop transmission-daemon
-sleep 3
-echo "kill transmission-daemon just in case"
-pid="$(ps aux | grep transmission-daemon | grep -v grep | awk '{print $2}')"
-[[ -n "$pid" ]] && kill $pid
+echo "Running: systemctl stop transmission-daemon"
+systemctl stop transmission-daemon.service
+sleep 7
 
-echo "create the local configs"
+echo "Running: systemctl disable transmission-daemon"
+systemctl disable transmission-daemon.service
+
+echo "Sleeping..."
+sleep 5
+
+echo "create the local configs by starting transmission-daemon"
 sudo -u ubuntu transmission-daemon
+
 echo "kill again so config edits last"
-pid="$(ps aux | grep transmission-daemon | grep -v grep | awk '{print $2}')"
-[[ -n "$pid" ]] && kill $pid
-sleep 1
+pid=$(ps aux | grep -v grep | grep transmission-daemon | awk '{print $2}')
+if [[ -n "$pid" ]]; then
+  kill -9 "$pid"
+fi
 
-sudo -u ubuntu /tmp/update-settings.py
+echo "Running update-settings.py"
+sudo -u ubuntu /var/tmp/update-settings.py
 
-echo "start again"
+echo "start transmission again"
 sudo -u ubuntu transmission-daemon -g /home/ubuntu/.config/transmission-daemon/
 
+echo "list torrents... expecting none"
+sudo -u ubuntu transmission-remote -l
+
 # lets just sleep a bit to give DNS a chance
+echo "While loop..."
 threshold=0
 while sleep 5; do
-    if [ $threshold -gt 25 ]; then
+    if [ $threshold -gt 5 ]; then
         echo "This is taking too long"
         break
     fi
@@ -64,18 +80,44 @@ while sleep 5; do
     threshold=$((threshold + 1))
 done
 
-# certbot is run and edits the default nginx config
-echo "Install certbot"
-snap refresh
-snap install certbot --classic
+echo "Un-tarring..."
+tar zxf /var/tmp/letsencrypt.tgz -C /etc
 
-echo "certbot certonly --nginx --agree-tos -m ${CertBotEmail} -d ${HostName} -n"
-certbot certonly --nginx --agree-tos -m "${CertBotEmail}" -d "${HostName}" -n
+CERT_PATH="/etc/letsencrypt/live/$HostName/fullchain.pem"
+ls -l "$CERT_PATH"
 
-echo "Running sed on nginx-proxy.conf"
-sed "s/_HOSTNAME_/${HostName}/g" /tmp/nginx-proxy.conf > /etc/nginx/conf.d/nginx-proxy.conf
+if [ ! -f "$CERT_PATH" ] || ! openssl x509 -checkend 172800 -noout -in "$CERT_PATH"; then
+  echo "Certificate is expired or not present — requesting new certificate"
 
-nginx -t 2>&1
-nginx -s reload 2>&1
+  # Install Certbot if not already installed
+  if ! command -v certbot >/dev/null; then
+    echo "Installing certbot via snap"
+    snap install core && snap refresh core
+    snap install certbot --classic
+  else
+    echo "Certbot already installed; refreshing"
+    snap refresh certbot
+  fi
 
-exit 0
+  # Request certificate
+  certbot certonly --nginx --agree-tos -m "$CertBotEmail" -d "$HostName" -n
+
+  # save new certs
+  cd /etc
+  tar zcf /tmp/letsencrypt.tgz letsencrypt
+  aws s3 cp /tmp/letsencrypt.tgz s3://"${BucketName}"/letsencrypt.tgz
+
+else
+  echo "Certificate is still valid."
+fi
+
+# Replace placeholder in nginx conf and reload Nginx
+echo "Generating nginx config for $HostName"
+sed "s/_HOSTNAME_/${HostName}/g" /var/tmp/nginx-proxy.conf > /etc/nginx/conf.d/nginx-proxy.conf
+
+# Validate and reload Nginx
+echo "Testing nginx config"
+nginx -t
+
+echo "Reloading nginx"
+nginx -s reload
