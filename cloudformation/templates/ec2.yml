@@ -58,18 +58,25 @@ Resources:
           !Sub
             |
             #!/bin/bash -xe
-            apt update -y
-            apt install transmission transmission-cli transmission-common transmission-daemon net-tools unzip nginx-light tree s3fs -y
+            echo "Begin UserData Setup..." >/tmp/setup.log
+            echo "Variables: hostname=${HostName} suffix=${Suffix} environment=${Environment} bucketname=${BucketName} certbotemail${CertBotEmail}" >>/tmp/setup.log
+            apt update -y 2>&1 >>/tmp/setup.log
+            apt install transmission transmission-cli transmission-common transmission-daemon net-tools unzip nginx-light tree s3fs -y 2>&1 >>/tmp/setup.log
             echo "${Environment}-cfn-ec2-${Suffix}" > /etc/hostname
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            ./aws/install
-            aws s3 ls 2>&1 >/tmp/s3.log
-            aws s3 cp "s3://${BucketName}/nginx-proxy.conf" /tmp/nginx-proxy.conf 2>&1 >>/tmp/s3.log
-            aws s3 cp "s3://${BucketName}/init.sh" /tmp/init.sh 2>&1 >>/tmp/s3.log
-            aws s3 cp "s3://${BucketName}/update-settings.py" /tmp/update-settings.py 2>&1 >>/tmp/s3.log
-            chmod +x /tmp/init.sh /tmp/update-settings.py 
-            nohup /tmp/init.sh "${HostName}" "${Suffix}" "${Environment}" "${BucketName}" "${CertBotEmail}" 2>&1 >/tmp/init.log &
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 2>&1 >>/tmp/setup.log
+            unzip awscliv2.zip 2>&1 >>/tmp/awscli.log
+            ./aws/install 2>&1 >>/tmp/awscli.log
+            echo "S3..." >>/tmp/setup.log
+            aws s3 ls 2>&1 >>/tmp/setup.log
+            aws s3 cp "s3://${BucketName}/nginx-proxy.conf" /var/tmp/nginx-proxy.conf 2>&1 >>/tmp/setup.log
+            aws s3 cp "s3://${BucketName}/init.sh" /var/tmp/init.sh 2>&1 >>/tmp/setup.log
+            aws s3 cp "s3://${BucketName}/update-settings.py" /var/tmp/update-settings.py 2>&1 >>/tmp/setup.log
+            aws s3 cp "s3://${BucketName}/letsencrypt.tgz" /var/tmp/letsencrypt.tgz 2>&1 >>/tmp/setup.log
+            aws s3 rm "s3://${BucketName}/letsencrypt.tgz" 2>&1 >>/tmp/setup.log
+            echo "Init..." >> /tmp/setup.log
+            chmod +x /var/tmp/init.sh /var/tmp/update-settings.py 2>&1 >>/tmp/setup.log
+            nohup /var/tmp/init.sh "${HostName}" "${Suffix}" "${Environment}" "${BucketName}" "${CertBotEmail}" 2>&1 >>/tmp/setup.log &
+            echo "Finished UserData..." >>/tmp/setup.log
       Tags:
         - Key: 'environment'
           Value: !Ref 'Environment'
