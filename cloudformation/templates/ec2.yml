@@ -45,8 +45,8 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
-            VolumeSize: 32
-            VolumeType: gp2
+            VolumeSize: 64
+            VolumeType: gp3
             DeleteOnTermination: true
       SecurityGroupIds:
         - !GetAtt Ec2SecurityGroup.GroupId
@@ -59,6 +59,12 @@ Resources:
             |
             #!/bin/bash -xe
             echo "Begin UserData Setup..." >/tmp/setup.log
+            fallocate -l 8G /swapfile 2>&1 >>/tmp/setup.log
+            chmod 600 /swapfile 2>&1 >>/tmp/setup.log
+            mkswap /swapfile 2>&1 >>/tmp/setup.log
+            swapon /swapfile 2>&1 >>/tmp/setup.log
+            swapon --show 2>&1 >>/tmp/setup.log
+            sysctl vm.swappiness=30 2>&1 >>/tmp/setup.log
             echo "Variables: hostname=${HostName} suffix=${Suffix} environment=${Environment} bucketname=${BucketName} certbotemail${CertBotEmail}" >>/tmp/setup.log
             apt update -y 2>&1 >>/tmp/setup.log
             apt install transmission transmission-cli transmission-common transmission-daemon net-tools unzip nginx-light tree s3fs -y 2>&1 >>/tmp/setup.log

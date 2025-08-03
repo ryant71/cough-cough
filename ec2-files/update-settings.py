@@ -4,6 +4,28 @@ import json
 import sys
 import os
 
+# Define the key-value pairs to update/add
+updates_to_apply = {
+    "download-dir": "/home/ubuntu/Downloads",
+    "incomplete-dir": "/home/ubuntu/incomplete-dir",
+    "incomplete-dir-enabled": True,
+    "download-queue-size": 1,
+    "encryption": 2,
+    "idle-seeding-limit": 10,
+    "idle-seeding-limit-enabled": True,
+    "peer-port": "51304",
+    "peer-port-random-on-start": True,
+    "peer-port-random-low": 49152,
+    "peer-port-random-high": 65535,
+    "ratio-limit": 1,
+    "ratio-limit-enabled": True,
+    "rename-partial-files": True,
+    "speed-limit-up-enabled": True,
+    "speed-limit-up": 5000,
+    "rpc-host-whitelist-enabled": False,
+    "rpc-whitelist-enabled": False,
+}
+
 
 def update_json_file(file_path, updates):
     """
@@ -37,35 +59,11 @@ def update_json_file(file_path, updates):
     print(f"Successfully updated {file_path}.")
 
 
-if __name__ == "__main__":
+# Define the path to your JSON file
+try:
+    json_file_path = sys.argv[1]
+except IndexError:
+    json_file_path = "/home/ubuntu/.config/transmission-daemon/settings.json"
 
-    # Define the path to your JSON file
-    try:
-        json_file_path = sys.argv[1]
-    except IndexError:
-        json_file_path = "/home/ubuntu/.config/transmission-daemon/settings.json"
-
-    # Define the key-value pairs to update/add
-    updates_to_apply = {
-        "download-dir": "/home/ubuntu/Downloads",
-        "incomplete-dir": "/home/ubuntu/incomplete-dir",
-        "incomplete-dir-enabled": True,
-        "download-queue-size": 1,
-        "encryption": 2,
-        "idle-seeding-limit": 20,
-        "idle-seeding-limit-enabled": True,
-        "peer-port": "51304",
-        "peer-port-random-on-start": True,
-        "peer-port-random-low": 49152,
-        "peer-port-random-high": 65535,
-        "ratio-limit": 1,
-        "ratio-limit-enabled": True,
-        "rename-partial-files": True,
-        "speed-limit-up-enabled": True,
-        "speed-limit-up": 50,
-        "rpc-host-whitelist-enabled": False,
-        "rpc-whitelist-enabled": False,
-    }
-
-    # Update the JSON file
-    update_json_file(json_file_path, updates_to_apply)
+# Update the JSON file
+update_json_file(json_file_path, updates_to_apply)
