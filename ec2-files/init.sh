@@ -121,3 +121,6 @@ nginx -t
 
 echo "Reloading nginx"
 nginx -s reload
+
+sleep 1
+aws s3 cp /tmp/setup.log s3://"${BucketName}"/setup.log
