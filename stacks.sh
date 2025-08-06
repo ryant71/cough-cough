@@ -95,4 +95,4 @@ if [[ " ${DELETE_LIST[*]} " =~ " hg-vpc " ]]; then
   delete_stack "hg-vpc"
 fi
 
-[[ "$#" == 0 ]] && { usage; exit 1; }
+[[ "$#" == 0 ]] && { usage; exit 0; }

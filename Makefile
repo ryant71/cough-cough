@@ -3,7 +3,7 @@ BUCKET := $(shell jq -r '.[] | select(.ParameterKey == "BucketName") | .Paramete
 S3_PATH := s3://$(BUCKET)/Downloads/
 LOCAL_PATH := /media/ryan/MyBookWD/S3/
 
-.PHONY: s3-sync s3-ls s3-clean help
+.PHONY: s3-sync s3-ls s3-clean local-ls deploy-ec2 delete-ec2 help
 
 .DEFAULT_GOAL := help
 
@@ -11,7 +11,6 @@ help:
 	@echo ""
 	@printf "$(YELLOW)Available Make targets:$(RESET)\n"
 	@awk 'BEGIN {FS = ":.*?#"} /^[a-zA-Z0-9_.-]+:.*?#/ {printf "  \033[1;32m%-35s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
-
 
 s3-sync: # Sync to download directory
 	@echo "Syncing from $(S3_PATH) to $(LOCAL_PATH)..."
@@ -26,5 +25,13 @@ s3-clean: # Remove files from S3 downloads directory
 	aws s3 rm $(S3_PATH) --recursive
 
 local-ls: # List contens of local download directory
-	@echo "List contents of $(LOCAL_PATH)..."
-	eza --tree -a -L 3  $(LOCAL_PATH)
+	@echo "Listing contents of $(LOCAL_PATH)..."
+	eza --tree -a -L 3 $(LOCAL_PATH)
+
+deploy-ec2: # Deploy the EC2 instance
+	@echo "Deploying the EC2 stack..."
+	./create.sh --verbose
+
+delete-ec2: # Delete the EC2 stack
+	@echo "Deleting the EC2 stack..."
+	./stacks.sh --delete hg-ec2 
