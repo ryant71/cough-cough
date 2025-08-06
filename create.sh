@@ -35,8 +35,9 @@ log() {
 print_outputs() {
   local outputs="$1"
   local when="${2:-}"
-  [[ "$VERBOSE" == false && "$when" != "always" ]] && return
-  echo "$outputs" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
+  if [[ "$VERBOSE" == true || "$when" == "always" ]]; then
+    echo "$outputs" | jq -r '.Stacks[].Outputs[] | [.ExportName, .OutputValue] | @tsv' | column -t -N Name,Value
+  fi
 }
 
 # Generic deploy function

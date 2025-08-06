@@ -35,7 +35,7 @@ sudo -u ubuntu ln -s /home/ubuntu/s3bucket/Downloads /home/ubuntu/Downloads
 # a tad convoluted
 echo "Running: systemctl stop transmission-daemon"
 systemctl stop transmission-daemon.service
-sleep 7
+sleep 5
 
 echo "Running: systemctl disable transmission-daemon"
 systemctl disable transmission-daemon.service
