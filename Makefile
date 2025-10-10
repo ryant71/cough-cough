@@ -1,7 +1,7 @@
 PARAMS_FILE := cloudformation/parameters/ec2-parameters.json
 BUCKET := $(shell jq -r '.[] | select(.ParameterKey == "BucketName") | .ParameterValue' $(PARAMS_FILE))
 S3_PATH := s3://$(BUCKET)/Downloads/
-LOCAL_PATH := /media/ryan/MyBookWD/S3/
+LOCAL_PATH := /var/tmp/S3/
 
 .PHONY: s3-sync s3-ls s3-clean local-ls deploy-ec2 delete-ec2 help
 
