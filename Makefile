@@ -24,13 +24,13 @@ s3-clean: # Remove files from S3 downloads directory
 	@echo "Deleting contents of $(S3_PATH)..."
 	aws s3 rm $(S3_PATH) --recursive
 
-local-ls: # List contens of local download directory
+local-ls: # List contents of local download directory
 	@echo "Listing contents of $(LOCAL_PATH)..."
 	eza --tree -a -L 3 $(LOCAL_PATH)
 
 deploy-ec2: # Deploy the EC2 instance
 	@echo "Deploying the EC2 stack..."
-	./create.sh --verbose
+	./create.py --verbose
 
 delete-ec2: # Delete the EC2 stack
 	@echo "Deleting the EC2 stack..."

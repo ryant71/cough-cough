@@ -65,7 +65,7 @@ sudo -u ubuntu transmission-remote -l
 echo "While loop..."
 threshold=0
 while sleep 5; do
-    if [ $threshold -gt 5 ]; then
+    if [ $threshold -gt 35 ]; then
         echo "This is taking too long"
         break
     fi

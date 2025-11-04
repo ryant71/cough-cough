@@ -160,10 +160,10 @@ done
 
 print_outputs "$ec2_stack_outputs" always
 
-# download logs
+echo "download logs"
 aws s3 cp s3://"${s3bucket}"/setup.log .
 
-# check for new letsencrypt tarball
+echo "check for new letsencrypt tarball"
 aws s3 cp s3://"${s3bucket}"/letsencrypt.tgz ec2-files/letsencrypt.tgz 2>/dev/null
 if [[ "$?" == 0 ]]; then
   aws s3 rm s3://"${s3bucket}"/letsencrypt.tgz
