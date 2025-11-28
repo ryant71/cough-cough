@@ -3,7 +3,7 @@ BUCKET := $(shell jq -r '.[] | select(.ParameterKey == "BucketName") | .Paramete
 S3_PATH := s3://$(BUCKET)/Downloads/
 LOCAL_PATH := /var/tmp/S3/
 
-.PHONY: s3-sync s3-ls s3-clean local-ls deploy-ec2 delete-ec2 help
+.PHONY: s3-sync s3-ls s3-clean local-ls launch-ec2 drop-ec2 help
 
 .DEFAULT_GOAL := help
 
@@ -28,10 +28,10 @@ local-ls: # List contents of local download directory
 	@echo "Listing contents of $(LOCAL_PATH)..."
 	eza --tree -a -L 3 $(LOCAL_PATH)
 
-deploy-ec2: # Deploy the EC2 instance
+launch-ec2: # Deploy the EC2 instance and launch transmission
 	@echo "Deploying the EC2 stack..."
 	./create.py --verbose
 
-delete-ec2: # Delete the EC2 stack
-	@echo "Deleting the EC2 stack..."
+drop-ec2: # Delete the EC2 instance stack
+	@echo "Drop the EC2 stack..."
 	./stacks.sh --delete hg-ec2 
