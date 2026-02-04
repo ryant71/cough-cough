@@ -4,7 +4,7 @@ Description: Deploys an EC2 AMI to a given VPC and subnet (qs-xxx)
 Mappings:
   InstanceMap:
     downloader:
-      InstanceType: 'm5.large'
+      InstanceType: 'c6i.large'
       AmiId: 'ami-03cc8375791cb8bcf' # ubuntu 24.04 x86
     somepurpose:
       InstanceType: 't3.nano'

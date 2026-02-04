@@ -56,6 +56,8 @@ usage() {
   echo "  $0 [--help]"
 }
 
+[[ "$#" == 0 ]] && { usage; exit 0; }
+
 DELETE_LIST=()
 
 while [[ $# -gt 0 ]]; do
@@ -94,5 +96,3 @@ fi
 if [[ " ${DELETE_LIST[*]} " =~ " hg-vpc " ]]; then
   delete_stack "hg-vpc"
 fi
-
-[[ "$#" == 0 ]] && { usage; exit 0; }

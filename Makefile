@@ -1,7 +1,7 @@
 PARAMS_FILE := cloudformation/parameters/ec2-parameters.json
 BUCKET := $(shell jq -r '.[] | select(.ParameterKey == "BucketName") | .ParameterValue' $(PARAMS_FILE))
 S3_PATH := s3://$(BUCKET)/Downloads/
-LOCAL_PATH := /var/tmp/S3/
+LOCAL_PATH := /mnt/backup_pool/tmpS3/
 
 .PHONY: s3-sync s3-ls s3-clean local-ls launch-ec2 drop-ec2 help
 
@@ -28,10 +28,12 @@ local-ls: # List contents of local download directory
 	@echo "Listing contents of $(LOCAL_PATH)..."
 	eza --tree -a -L 3 $(LOCAL_PATH)
 
-launch-ec2: # Deploy the EC2 instance and launch transmission
+ec2-launch: # Deploy the EC2 instance and launch transmission
 	@echo "Deploying the EC2 stack..."
 	./create.py --verbose
 
-drop-ec2: # Delete the EC2 instance stack
+ec2-delete: # Delete the EC2 instance stack
 	@echo "Drop the EC2 stack..."
 	./stacks.sh --delete hg-ec2 
+	./stacks.sh --list-stacks
+	./stacks.sh --list-ec2
