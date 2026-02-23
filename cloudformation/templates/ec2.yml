@@ -6,9 +6,11 @@ Mappings:
     downloader:
       InstanceType: 'c6i.large'
       AmiId: 'ami-03cc8375791cb8bcf' # ubuntu 24.04 x86
+      VolumeSize: 128
     somepurpose:
       InstanceType: 't3.nano'
       AmiId: 'ami-03cc8375791cb8bcf' # ubuntu 24.04 x86
+      VolumeSize: 16
 
 Parameters:
   Environment:
@@ -45,7 +47,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
-            VolumeSize: 64
+            VolumeSize: !FindInMap [InstanceMap, !Ref Suffix, 'VolumeSize']
             VolumeType: gp3
             DeleteOnTermination: true
       SecurityGroupIds:
