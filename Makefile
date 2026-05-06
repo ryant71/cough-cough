@@ -24,7 +24,7 @@ s3-clean: # Remove files from S3 downloads directory
 	@echo "Deleting contents of $(S3_PATH)..."
 	aws s3 rm $(S3_PATH) --recursive
 
-local-ls: # List contents of local download directory
+s3-local-ls: # List contents of local download directory
 	@echo "Listing contents of $(LOCAL_PATH)..."
 	eza --tree -a -L 3 $(LOCAL_PATH)
 
@@ -37,3 +37,7 @@ ec2-delete: # Delete the EC2 instance stack
 	./stacks.sh --delete hg-ec2 
 	./stacks.sh --list-stacks
 	./stacks.sh --list-ec2
+
+whoami: # Find out which IAM user I am
+	@echo "You are..."
+	aws iam get-user
